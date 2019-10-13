@@ -759,8 +759,14 @@ func (dns *Msg) PackBuffer(buf []byte) (msg []byte, err error) {
 	// If this message can't be compressed, avoid filling the
 	// compression map and creating garbage.
 	if dns.Compress && dns.isCompressible() {
-		compression := make(map[string]uint16) // Compression pointer mappings.
-		return dns.packBufferWithCompressionMap(buf, compressionMap{int: compression}, true)
+		pool := compressionPackPool(dns)
+		compression := pool.Get().(map[string]uint16)
+		msg, err := dns.packBufferWithCompressionMap(buf, compressionMap{int: compression}, true)
+		for k := range compression {
+			delete(compression, k)
+		}
+		pool.Put(compression)
+		return msg, err
 	}
 
 	return dns.packBufferWithCompressionMap(buf, compressionMap{}, false)
@@ -980,8 +986,14 @@ func (dns *Msg) Len() int {
 	// If this message can't be compressed, avoid filling the
 	// compression map and creating garbage.
 	if dns.Compress && dns.isCompressible() {
-		compression := make(map[string]struct{})
-		return msgLenWithCompressionMap(dns, compression)
+		pool := compressionLenPool(dns)
+		compression := pool.Get().(map[string]struct{})
+		n := msgLenWithCompressionMap(dns, compression)
+		for k := range compression {
+			delete(compression, k)
+		}
+		pool.Put(compression)
+		return n
 	}
 
 	return msgLenWithCompressionMap(dns, nil)

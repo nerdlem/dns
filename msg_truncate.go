@@ -54,7 +54,8 @@ func (dns *Msg) Truncate(size int) {
 		size -= Len(edns0)
 	}
 
-	compression := make(map[string]struct{})
+	pool := compressionLenPool(dns)
+	compression := pool.Get().(map[string]struct{})
 
 	l = headerSize
 	for _, r := range dns.Question {
@@ -88,6 +89,11 @@ func (dns *Msg) Truncate(size int) {
 		// Add the OPT record back onto the additional section.
 		dns.Extra = append(dns.Extra, edns0)
 	}
+
+	for k := range compression {
+		delete(compression, k)
+	}
+	pool.Put(compression)
 }
 
 func truncateLoop(rrs []RR, size, l int, compression map[string]struct{}) (int, int) {
